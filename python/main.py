@@ -39,7 +39,7 @@ async def get_openai_completion(prompt):
     try:
         chat_completion = await openai.ChatCompletion.acreate(
             deployment_id="deep-new",
-            model="gpt-4",
+            model="gpt-4-128k",
             messages=[{"role": 'user', "content": prompt}]
         )
 
@@ -54,29 +54,22 @@ router = Router(name=__name__)
 
 @router.message(ContentTypesFilter.Text())
 async def handle_text(message: Message, state: FSMContext) -> Any:
-    """
-    Handler will forward receive a message back to the sender
-
-    By default, message handler will handle all message types (like a text, photo, sticker etc.)
-    """
-    logger.info(f"---------\nReceived message: {message}")
-    context_text = message.reply_to_message.text if message.reply_to_message else ""
-    document_file = message.reply_to_message.document if message.reply_to_message and message.reply_to_message.document else None
-
-    if document_file:
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-            await bot.download(document_file, temp_file.name)
-
-        async with aiofiles.open(temp_file.name, 'r', encoding='utf-8') as file:
-            context_text += await file.read()
-    answer = await get_openai_completion(f"Context:\n{context_text}Prompt:\n{message.text}")
-    await send_or_split_message(message, answer)
     try:
-        # Send a copy of the received message
+
         logger.info(f"---------\nReceived message: {message}")
-    except TypeError:
-        # But not all the types is supported to be copied so need to handle it
-        logger.info(f"---------\nReceived message: {message.to_python()}")
+        context_text = message.reply_to_message.text if message.reply_to_message else ""
+        document_file = message.reply_to_message.document if message.reply_to_message and message.reply_to_message.document else None
+
+        if document_file:
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                await bot.download(document_file, temp_file.name)
+
+            async with aiofiles.open(temp_file.name, 'r', encoding='utf-8') as file:
+                context_text += await file.read()
+        answer = await get_openai_completion(f"Context:\n{context_text}Prompt:\n{message.text}")
+        await send_or_split_message(message, answer)
+    except Exception as e:
+        logger.error(e)
 
 
 dp = Dispatcher()
