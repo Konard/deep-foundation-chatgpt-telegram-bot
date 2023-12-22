@@ -66,7 +66,7 @@ class UserContext:
         self.data = ""
 
     def update_data(self, value):
-        self.data += value
+        self.data += "\n" + value
 
     def clear_data(self):
         self.data = ""
@@ -145,10 +145,8 @@ async def handle_text(message: Message) -> Any:
         if document_file:
             with tempfile.NamedTemporaryFile(delete=False) as temp_file:
                 await bot.download(document_file, temp_file.name)
-
             async with aiofiles.open(temp_file.name, 'r', encoding='utf-8') as file:
                 user_context.update_data(await file.read())
-
         tokens_count = len(encoding.encode(user_context.get_data()))
         builder = InlineKeyboardBuilder()
         builder.button(text="Send request", callback_data=MyCallback(action="Send", id=user_id))
@@ -159,6 +157,27 @@ async def handle_text(message: Message) -> Any:
     except Exception as e:
         logger.error(e)
 
+
+@router.message(ContentTypesFilter.Document())
+async def handle_document(message: Message) -> Any:
+    print(message)
+    user_id = message.from_user.id
+    user_context = get_user_context(user_id)
+    user_document = message.document if message.document else None
+    if message.caption:
+        user_context.update_data(message.caption)
+    if user_document:
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            await bot.download(user_document, temp_file.name)
+        async with aiofiles.open(temp_file.name, 'r', encoding='utf-8') as file:
+            user_context.update_data(await file.read())
+    tokens_count = len(encoding.encode(user_context.get_data()))
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Send request", callback_data=MyCallback(action="Send", id=user_id))
+    builder.button(text="Clear context", callback_data=MyCallback(action="Clear", id=user_id))
+    builder.button(text="See context", callback_data=MyCallback(action="See", id=user_id))
+    markup = builder.as_markup()
+    await message.answer(f"Your context: {tokens_count}/128000", reply_markup=markup)
 
 dp = Dispatcher()
 
