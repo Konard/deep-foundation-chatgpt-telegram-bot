@@ -11,7 +11,6 @@ import openai
 from aiogram import Bot, Dispatcher, Router
 from aiogram.enums import ParseMode
 from aiogram.filters.callback_data import CallbackData
-from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, BufferedInputFile, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from dotenv import load_dotenv
@@ -55,12 +54,6 @@ async def get_openai_completion(prompt):
 
 
 router = Router(name=__name__)
-
-
-async def fetch(url):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            return await response.text()
 
 
 class MyCallback(CallbackData, prefix="my"):
@@ -135,7 +128,8 @@ async def fetch(url):
 
 @router.message(ContentTypesFilter.Text())
 async def handle_text(message: Message) -> Any:
-    user_context = get_user_context(message.from_user.id)
+    user_id = message.from_user.id
+    user_context = get_user_context(user_id)
     try:
         if message.text:
             user_context.update_data(message.text)
@@ -157,9 +151,9 @@ async def handle_text(message: Message) -> Any:
 
         tokens_count = len(encoding.encode(user_context.get_data()))
         builder = InlineKeyboardBuilder()
-        builder.button(text="Send request", callback_data=MyCallback(action="Send", id=message.from_user.id))
-        builder.button(text="Clear context", callback_data=MyCallback(action="Clear", id=message.from_user.id))
-        builder.button(text="See context", callback_data=MyCallback(action="See", id=message.from_user.id))
+        builder.button(text="Send request", callback_data=MyCallback(action="Send", id=user_id))
+        builder.button(text="Clear context", callback_data=MyCallback(action="Clear", id=user_id))
+        builder.button(text="See context", callback_data=MyCallback(action="See", id=user_id))
         markup = builder.as_markup()
         await message.answer(f"Your context: {tokens_count}/128000", reply_markup=markup)
     except Exception as e:
@@ -169,7 +163,6 @@ async def handle_text(message: Message) -> Any:
 dp = Dispatcher()
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-# Initialize Bot instance with a default parse mode which will be passed to all API calls
 bot = Bot(TOKEN, parse_mode=ParseMode.HTML)
 
 
