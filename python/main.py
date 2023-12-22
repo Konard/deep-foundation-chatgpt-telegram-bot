@@ -29,14 +29,15 @@ encoding = tiktoken.encoding_for_model("gpt-4")
 
 
 async def send_or_split_message(message, text):
-    text_file = BufferedInputFile(bytes(text, 'utf-8'), filename="file.txt")
     if len(text) > 4096:
         for i in range(0, len(text), 4096):
             text_chunk = text[i:i + 4096]
-            await message.answer(text_chunk, reply_to_message_id=message.message_id)
+            await message.answer(text_chunk)
     else:
-        await message.answer(text, reply_to_message_id=message.message_id)
-    await message.answer_document(text_file, reply_to_message_id=message.message_id)
+        await message.answer(text)
+
+    # text_file = BufferedInputFile(bytes(text, 'utf-8'), filename="file.txt")
+    # await message.answer_document(text_file)
 
 
 async def get_openai_completion(prompt):
@@ -95,6 +96,7 @@ async def handle_callback_query(callback_query: CallbackQuery) -> Any:
             await callback_query.message.answer("Context is empty")
         else:
             answer = await get_openai_completion(user_data)
+            user_context.update_data("\n---\n" + answer)
             await send_or_split_message(callback_query.message, answer)
     elif cb1.action == "Clear":
         user_context.clear_data()
@@ -132,11 +134,11 @@ async def handle_text(message: Message) -> Any:
     user_context = get_user_context(user_id)
     try:
         if message.text:
-            user_context.update_data(message.text)
+            user_context.update_data("\n---\n" + message.text)
         if contains_url(message.text):
             url = find_url(message.text)
             html_content = await fetch(url)
-            user_context.update_data(html_content)
+            user_context.update_data(url + ":\n" + html_content)
 
         logger.info(f"---------\nReceived message: {message}")
         if message.reply_to_message and message.reply_to_message.text:
@@ -160,24 +162,29 @@ async def handle_text(message: Message) -> Any:
 
 @router.message(ContentTypesFilter.Document())
 async def handle_document(message: Message) -> Any:
-    print(message)
-    user_id = message.from_user.id
-    user_context = get_user_context(user_id)
-    user_document = message.document if message.document else None
-    if message.caption:
-        user_context.update_data(message.caption)
-    if user_document:
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-            await bot.download(user_document, temp_file.name)
-        async with aiofiles.open(temp_file.name, 'r', encoding='utf-8') as file:
-            user_context.update_data(await file.read())
-    tokens_count = len(encoding.encode(user_context.get_data()))
-    builder = InlineKeyboardBuilder()
-    builder.button(text="Send request", callback_data=MyCallback(action="Send", id=user_id))
-    builder.button(text="Clear context", callback_data=MyCallback(action="Clear", id=user_id))
-    builder.button(text="See context", callback_data=MyCallback(action="See", id=user_id))
-    markup = builder.as_markup()
-    await message.answer(f"Your context: {tokens_count}/128000", reply_markup=markup)
+    try:
+        user_id = message.from_user.id
+        user_context = get_user_context(user_id)
+        user_document = message.document if message.document else None
+        if message.caption:
+            user_context.update_data(message.caption)
+        if user_document:
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                await bot.download(user_document, temp_file.name)
+            async with aiofiles.open(temp_file.name, 'r', encoding='utf-8') as file:
+                user_context.update_data(await file.read())
+        tokens_count = len(encoding.encode(user_context.get_data()))
+        builder = InlineKeyboardBuilder()
+        builder.button(text="Send request", callback_data=MyCallback(action="Send", id=user_id))
+        builder.button(text="Clear context", callback_data=MyCallback(action="Clear", id=user_id))
+        builder.button(text="See context", callback_data=MyCallback(action="See", id=user_id))
+        markup = builder.as_markup()
+        await message.answer(f"Your context: {tokens_count}/128000", reply_markup=markup)
+    except UnicodeDecodeError as e:
+        logger.error(e)
+        await message.answer("This file is not supported.")
+    except Exception as e:
+        logger.error(e)
 
 dp = Dispatcher()
 
