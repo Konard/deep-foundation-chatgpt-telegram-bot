@@ -1,15 +1,19 @@
 import asyncio
 import logging
 import os
+import re
 import sys
 from typing import Any
-
+import tiktoken
 import aiofiles
+import aiohttp
 import openai
 from aiogram import Bot, Dispatcher, Router
 from aiogram.enums import ParseMode
+from aiogram.filters.callback_data import CallbackData
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, BufferedInputFile
+from aiogram.types import Message, BufferedInputFile, CallbackQuery
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from dotenv import load_dotenv
 import tempfile
 from python import Filters as ContentTypesFilter
@@ -22,6 +26,7 @@ openai.api_type = "azure"
 openai.api_key = os.getenv('OPENAI_API_KEY')
 openai.api_base = "https://deep-azure.openai.azure.com/"
 openai.api_version = "2023-06-01-preview"
+encoding = tiktoken.encoding_for_model("gpt-4")
 
 
 async def send_or_split_message(message, text):
@@ -52,22 +57,89 @@ async def get_openai_completion(prompt):
 router = Router(name=__name__)
 
 
+async def fetch(url):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.text()
+
+
+class MyCallback(CallbackData, prefix="my"):
+    action: str
+    id: int
+
+
+class UserContext:
+    def __init__(self):
+        self.data = ""
+
+    def update_data(self, value):
+        self.data += value
+
+    def clear_data(self):
+        self.data = ""
+
+    def get_data(self):
+        return self.data
+
+
+users_context = {}
+
+
+def get_user_context(user_id):
+    if user_id not in users_context:
+        users_context[user_id] = UserContext()
+    return users_context[user_id]
+
+
+@router.callback_query()
+async def handle_callback_query(callback_query: CallbackQuery) -> Any:
+
+    data = callback_query.data
+    cb1 = MyCallback.unpack(data)
+    user_context = get_user_context(cb1.id)
+    user_data = user_context.get_data()
+    if cb1.action == "Send":
+        if user_data == "":
+            await callback_query.message.answer("Context is empty")
+        else:
+            answer = await get_openai_completion(user_data)
+            await send_or_split_message(callback_query.message, answer)
+    elif cb1.action == "Clear":
+        user_context.clear_data()
+        await callback_query.message.answer("Context cleared")
+    elif cb1.action == "See":
+        if user_data == "":
+            await callback_query.message.answer("Context is empty")
+        else:
+            await callback_query.message.answer(user_data)
+    await callback_query.answer()
+
+
 @router.message(ContentTypesFilter.Text())
-async def handle_text(message: Message, state: FSMContext) -> Any:
+async def handle_text(message: Message) -> Any:
+    user_context = get_user_context(message.from_user.id)
     try:
+        if message.text:
+            user_context.update_data(message.text)
 
         logger.info(f"---------\nReceived message: {message}")
-        context_text = message.reply_to_message.text if message.reply_to_message else ""
+        if message.reply_to_message and message.reply_to_message.text:
+            user_context.update_data(message.reply_to_message.text)
         document_file = message.reply_to_message.document if message.reply_to_message and message.reply_to_message.document else None
-
         if document_file:
             with tempfile.NamedTemporaryFile(delete=False) as temp_file:
                 await bot.download(document_file, temp_file.name)
 
             async with aiofiles.open(temp_file.name, 'r', encoding='utf-8') as file:
-                context_text += await file.read()
-        answer = await get_openai_completion(f"Context:\n{context_text}Prompt:\n{message.text}")
-        await send_or_split_message(message, answer)
+                user_context.update_data(await file.read())
+
+        tokens_count = len(encoding.encode(user_context.get_data()))
+        builder = InlineKeyboardBuilder()
+        builder.button(text="Send request", callback_data=MyCallback(action="Send", id=message.from_user.id))
+        builder.button(text="Clear context", callback_data=MyCallback(action="Clear", id=message.from_user.id))
+        builder.button(text="See context", callback_data=MyCallback(action="See", id=message.from_user.id))
+        markup = builder.as_markup()
+        await message.answer(f"Your context: {tokens_count}/128000", reply_markup=markup)
     except Exception as e:
         logger.error(e)
 
