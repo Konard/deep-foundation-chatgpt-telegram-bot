@@ -93,7 +93,6 @@ def get_user_context(user_id):
 
 @router.callback_query()
 async def handle_callback_query(callback_query: CallbackQuery) -> Any:
-
     data = callback_query.data
     cb1 = MyCallback.unpack(data)
     user_context = get_user_context(cb1.id)
@@ -115,12 +114,35 @@ async def handle_callback_query(callback_query: CallbackQuery) -> Any:
     await callback_query.answer()
 
 
+def contains_url(string):
+    url_pattern = re.compile(r'https?://\S+')
+    return url_pattern.search(string) is not None
+
+
+def find_url(string):
+    url_pattern = re.compile(r'https?://\S+')
+    match = url_pattern.search(string)
+    if match:
+        return match.group()
+    return None
+
+
+async def fetch(url):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.text()
+
+
 @router.message(ContentTypesFilter.Text())
 async def handle_text(message: Message) -> Any:
     user_context = get_user_context(message.from_user.id)
     try:
         if message.text:
             user_context.update_data(message.text)
+        if contains_url(message.text):
+            url = find_url(message.text)
+            html_content = await fetch(url)
+            user_context.update_data(html_content)
 
         logger.info(f"---------\nReceived message: {message}")
         if message.reply_to_message and message.reply_to_message.text:
