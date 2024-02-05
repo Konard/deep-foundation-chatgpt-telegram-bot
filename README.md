@@ -21,10 +21,10 @@
 
 4. **Сборка Docker образа**
     ```bash
-    docker build -t <yourimagename> .
+    docker build -t deep-chatgpt-telegram-bot .
     ```
 
 5. **Запуск Docker контейнера**
     ```bash
-    docker run -p <port> --name <yourcontainername> <yourimagename>
+    docker run -p 8080:8080 --name container-deep-chatgpt-telegram-bot deep-chatgpt-telegram-bot
     ```
