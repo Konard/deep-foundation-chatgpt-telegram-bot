@@ -15,7 +15,7 @@ from aiogram.types import Message, BufferedInputFile, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from dotenv import load_dotenv
 import tempfile
-from python import Filters as ContentTypesFilter
+import Filters as ContentTypesFilter
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 openai.api_type = "azure"
 openai.api_key = os.getenv('OPENAI_API_KEY')
-openai.api_base = "https://deep-azure.openai.azure.com/"
-openai.api_version = "2023-06-01-preview"
+openai.api_base = "https://deep-ai.openai.azure.com"
+openai.api_version = "2023-03-15-preview"
 encoding = tiktoken.encoding_for_model("gpt-4")
 
 
@@ -43,8 +43,8 @@ async def send_or_split_message(message, text):
 async def get_openai_completion(prompt):
     try:
         chat_completion = await openai.ChatCompletion.acreate(
-            deployment_id="deep-new",
-            model="gpt-4-128k",
+            deployment_id="gpt-4-32k",
+            model="gpt-4",
             messages=[{"role": 'user', "content": prompt}]
         )
 
@@ -87,15 +87,20 @@ def get_user_context(user_id):
 
 @router.callback_query()
 async def handle_callback_query(callback_query: CallbackQuery) -> Any:
+    print(111)
     data = callback_query.data
     cb1 = MyCallback.unpack(data)
     user_context = get_user_context(cb1.id)
     user_data = user_context.get_data()
+    print(222)
     if cb1.action == "Send":
         if user_data == "":
+            print(333)
             await callback_query.message.answer("Context is empty")
         else:
+            print(444)
             answer = await get_openai_completion(user_data)
+            print(answer)
             user_context.update_data("\n---\n" + answer)
             await send_or_split_message(callback_query.message, answer)
     elif cb1.action == "Clear":
