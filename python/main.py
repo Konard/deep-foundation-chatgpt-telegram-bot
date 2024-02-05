@@ -96,7 +96,6 @@ async def handle_callback_query(callback_query: CallbackQuery) -> Any:
             await callback_query.message.answer("Context is empty")
         else:
             answer = await get_openai_completion(user_data)
-            print(answer)
             user_context.update_data("\n---\n" + answer)
             await send_or_split_message(callback_query.message, answer)
     elif cb1.action == "Clear":
