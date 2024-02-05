@@ -26,5 +26,5 @@
 
 5. **Запуск Docker контейнера**
     ```bash
-    docker run -p 8080:8080 --name yourcontainername yourimagename
+    docker run -p <port> --name <yourcontainername> <yourimagename>
     ```
