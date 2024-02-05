@@ -21,7 +21,7 @@
 
 4. **Сборка Docker образа**
     ```bash
-    docker build -t yourimagename .
+    docker build -t <yourimagename> .
     ```
 
 5. **Запуск Docker контейнера**
