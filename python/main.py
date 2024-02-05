@@ -87,18 +87,14 @@ def get_user_context(user_id):
 
 @router.callback_query()
 async def handle_callback_query(callback_query: CallbackQuery) -> Any:
-    print(111)
     data = callback_query.data
     cb1 = MyCallback.unpack(data)
     user_context = get_user_context(cb1.id)
     user_data = user_context.get_data()
-    print(222)
     if cb1.action == "Send":
         if user_data == "":
-            print(333)
             await callback_query.message.answer("Context is empty")
         else:
-            print(444)
             answer = await get_openai_completion(user_data)
             print(answer)
             user_context.update_data("\n---\n" + answer)
