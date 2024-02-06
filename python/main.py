@@ -15,7 +15,7 @@ from aiogram.types import Message, BufferedInputFile, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from dotenv import load_dotenv
 import tempfile
-from python import Filters as ContentTypesFilter
+import Filters as ContentTypesFilter
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 openai.api_type = "azure"
 openai.api_key = os.getenv('OPENAI_API_KEY')
-openai.api_base = "https://deep-azure.openai.azure.com/"
-openai.api_version = "2023-06-01-preview"
+openai.api_base = "https://deep-ai.openai.azure.com"
+openai.api_version = "2023-03-15-preview"
 encoding = tiktoken.encoding_for_model("gpt-4")
 
 
@@ -43,8 +43,8 @@ async def send_or_split_message(message, text):
 async def get_openai_completion(prompt):
     try:
         chat_completion = await openai.ChatCompletion.acreate(
-            deployment_id="deep-new",
-            model="gpt-4-128k",
+            deployment_id="gpt-4-128k",
+            model="gpt-4",
             messages=[{"role": 'user', "content": prompt}]
         )
 
