@@ -43,7 +43,7 @@ async def send_or_split_message(message, text):
 async def get_openai_completion(prompt):
     try:
         chat_completion = await openai.ChatCompletion.acreate(
-            deployment_id="gpt-4-32k",
+            deployment_id="gpt-4-128k",
             model="gpt-4",
             messages=[{"role": 'user', "content": prompt}]
         )
